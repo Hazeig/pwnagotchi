@@ -25,9 +25,9 @@
         - apt-daily-upgrade.timer
         - apt-daily-upgrade.service
         - wpa_supplicant.service
-        - bluetooth.service
         - triggerhappy.service
         - ifup@wlan0.service
+        - bluetooth.service
     packages:
       bettercap:
         url: "https://github.com/bettercap/bettercap/releases/download/v2.25/bettercap_linux_armv6l_2.25.zip"

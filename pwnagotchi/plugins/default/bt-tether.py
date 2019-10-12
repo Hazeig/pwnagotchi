@@ -8,6 +8,7 @@ import os
 import time
 import re
 import logging
+import subprocess
 from pwnagotchi.ui.components import LabeledValue
 from pwnagotchi.ui.view import BLACK
 import pwnagotchi.ui.fonts as fonts
@@ -18,7 +19,89 @@ OPTIONS = dict()
 
 
 class BluetoothControllerExpection(Exception):
+    """
+    Just an exception
+    """
     pass
+
+
+class SystemdUnitWrapper:
+    """
+    systemd wrapper
+    """
+
+    def __init__(self, unit):
+        self.unit = unit
+
+    @staticmethod
+    def _action_on_unit(action, unit):
+        process = subprocess.Popen(f"systemctl {action} {unit}", shell=True, stdin=None,
+                                  stdout=open("/dev/null", "w"), stderr=None, executable="/bin/bash")
+        process.wait()
+        if process.returncode > 0:
+            return False
+        return True
+
+    @staticmethod
+    def daemon_reload():
+        """
+        Calls systemctl daemon-reload
+        """
+        process = subprocess.Popen("systemctl daemon-reload", shell=True, stdin=None,
+                                  stdout=open("/dev/null", "w"), stderr=None, executable="/bin/bash")
+        process.wait()
+        if process.returncode > 0:
+            return False
+        return True
+
+    def is_active(self):
+        """
+        Checks if unit is active
+        """
+        return SystemdUnitWrapper._action_on_unit('is-active', self.unit)
+
+    def is_enabled(self):
+        """
+        Checks if unit is enabled
+        """
+        return SystemdUnitWrapper._action_on_unit('is-enabled', self.unit)
+
+    def is_failed(self):
+        """
+        Checks if unit is failed
+        """
+        return SystemdUnitWrapper._action_on_unit('is-failed', self.unit)
+
+    def enable(self):
+        """
+        Enables the unit
+        """
+        return SystemdUnitWrapper._action_on_unit('enable', self.unit)
+
+    def disable(self):
+        """
+        Disables the unit
+        """
+        return SystemdUnitWrapper._action_on_unit('disable', self.unit)
+
+    def start(self):
+        """
+        Starts the unit
+        """
+        return SystemdUnitWrapper._action_on_unit('start', self.unit)
+
+    def stop(self):
+        """
+        Stops the unit
+        """
+        return SystemdUnitWrapper._action_on_unit('stop', self.unit)
+
+    def restart(self):
+        """
+        Restarts the unit
+        """
+        return SystemdUnitWrapper._action_on_unit('restart', self.unit)
+
 
 class BluetoothController:
     """
@@ -130,6 +213,31 @@ class BluetoothController:
         """
         return mac in self.get_paired()
 
+def _ensure_line_in_file(path, regexp, line):
+    """
+    Emulate ansibles lineinfile
+    """
+    search_regexp = re.compile(regexp)
+    changed = False
+
+    with open(path, 'r') as input_file, open(f"{path}.tmp", 'w') as output_file:
+        for old_line in input_file:
+            if search_regexp.search(old_line):
+                if old_line.rstrip('\n').strip() != line:
+                    output_file.write(line + '\n')
+                    changed = True
+            else:
+                output_file.write(old_line)
+    if changed:
+        process = subprocess.Popen(f"mv {path}.tmp {path}", shell=True, stdin=None,
+                                  stdout=open("/dev/null", "w"), stderr=None, executable="/bin/bash")
+        process.wait()
+
+        if process.returncode == 0:
+            return True
+
+    return False
+
 def on_loaded():
     """
     Gets called when the plugin gets loaded
@@ -139,6 +247,24 @@ def on_loaded():
     if 'mac' not in OPTIONS or ('mac' in OPTIONS and OPTIONS['mac'] is None):
         logging.error("BT-TET: Pleace specify the mac of the bluetooth device.")
         return
+
+    bt_unit = SystemdUnitWrapper('bluetooth.service')
+    btnap_unit = SystemdUnitWrapper('btnap.service')
+
+    if _ensure_line_in_file('/etc/btnap.conf', r'^REMOTE_DEV=', f"REMOTE_DEV={OPTIONS['mac']}"):
+        if not btnap_unit.restart():
+            logging.error("BT-TET: Can't restart btnap.service")
+            return
+
+    if not bt_unit.is_active():
+        if not bt_unit.start():
+            logging.error("BT-TET: Can't start bluetooth.service")
+            return
+
+    if not btnap_unit.is_active():
+        if btnap_unit.start():
+            logging.error("BT-TET: Can't start btnap.service")
+            return
 
     READY = True
 
