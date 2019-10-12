@@ -15,6 +15,7 @@ import pwnagotchi.ui.fonts as fonts
 #from pwnagotchi.utils import StatusFile
 
 READY = False
+INTERVAL = 0
 OPTIONS = dict()
 
 
@@ -108,13 +109,15 @@ class BluetoothController:
     Wraps bluetoothctl
     """
 
-    PROMPT = '\x1b[0;94m[bluetooth]\x1b[0m# '
+    PROMPT = '# '
 
     def __init__(self):
         import pexpect
         self._process = pexpect.spawn("bluetoothctl", echo=False)
         self.run("power on")
 
+    def close(self):
+        self._process.close()
 
     def run(self, cmd, expect_str=None, wait=0):
         """
@@ -213,6 +216,97 @@ class BluetoothController:
         """
         return mac in self.get_paired()
 
+class IfaceWrapper:
+    """
+    Small wrapper to check and manage ifaces
+
+    see: https://github.com/rlisagor/pynetlinux/blob/master/pynetlinux/ifconfig.py
+    """
+
+    def __init__(self, iface):
+        self.iface = iface
+        self.path = f"/sys/class/net/{iface}"
+
+    def exists(self):
+        """
+        Checks if iface exists
+        """
+        return os.path.exists(self.path)
+
+    def is_up(self):
+        """
+        Checks if iface is ip
+        """
+        return open(f"{self.path}/operstate", 'r').read().rsplit('\n') == 'up'
+
+
+    def set_netmask(self, netmask):
+        """
+        Set the netmask
+        """
+        import socket, struct, fcntl, math, ctypes
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockfd = sock.fileno()
+        netmask = ctypes.c_uint32(~((2 ** (32 - netmask)) - 1)).value
+        nmbytes = socket.htonl(netmask)
+        ifreq = struct.pack('16sH2sI8s', self.iface.encode(), socket.AF_INET, b'\x00'*2, nmbytes, b'\x00'*8)
+
+        try:
+            fcntl.ioctl(sockfd, 0x891C, ifreq)
+        except Exception:
+            return False
+        return True
+
+    def get_netmask(self):
+        """
+        Get the netmask
+
+        example: 24
+        """
+        import socket, struct, fcntl, math, ctypes
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockfd = sock.fileno()
+        ifreq = struct.pack('16sH14s', self.iface.encode(), socket.AF_INET, b'\x00'*14)
+        try:
+            res = fcntl.ioctl(sockfd, 0x891B, ifreq)
+        except IOError:
+            return 0
+        netmask = socket.ntohl(struct.unpack('16sH2xI8x', res)[2])
+
+        return 32 - int(round(
+            math.log(ctypes.c_uint32(~netmask).value + 1, 2), 1))
+
+    def get_ip(self):
+        """
+        Get the ipaddr
+        """
+        import socket, struct, fcntl
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockfd = sock.fileno()
+        ifreq = struct.pack('16sH14s', self.iface.encode(), socket.AF_INET, b'\x00'*14)
+        try:
+            res = fcntl.ioctl(sockfd, 0x8915, ifreq)
+        except Exception:
+            return None
+        ip_addr = struct.unpack('16sH2x4s8x', res)[2]
+        return socket.inet_ntoa(ip_addr)
+
+
+    def set_ip(self, ip):
+        """
+        Add ip to iface
+        """
+        import socket, struct, fcntl
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        bin_ip = socket.inet_aton(ip)
+        ifreq = struct.pack('16sH2s4s8s', self.iface.encode(), socket.AF_INET, b'\x00' * 2, bin_ip, b'\x00' * 8)
+        try:
+            fcntl.ioctl(sock, 0x8916, ifreq)
+        except Exception:
+            return False
+        return True
+
+
 def _ensure_line_in_file(path, regexp, line):
     """
     Emulate ansibles lineinfile
@@ -244,69 +338,119 @@ def on_loaded():
     """
     global READY
 
-    if 'mac' not in OPTIONS or ('mac' in OPTIONS and OPTIONS['mac'] is None):
-        logging.error("BT-TET: Pleace specify the mac of the bluetooth device.")
-        return
-
-    bt_unit = SystemdUnitWrapper('bluetooth.service')
-    btnap_unit = SystemdUnitWrapper('btnap.service')
-
-    if _ensure_line_in_file('/etc/btnap.conf', r'^REMOTE_DEV=', f"REMOTE_DEV={OPTIONS['mac']}"):
-        if not btnap_unit.restart():
-            logging.error("BT-TET: Can't restart btnap.service")
+    for opt in ['mac', 'ip', 'netmask', 'interval']:
+        if opt not in OPTIONS or (opt in OPTIONS and OPTIONS[opt] is None):
+            logging.error("BT-TET: Pleace specify the %s in your config.yml.", opt)
             return
 
+    # ensure bluetooth is running
+    bt_unit = SystemdUnitWrapper('bluetooth.service')
     if not bt_unit.is_active():
         if not bt_unit.start():
             logging.error("BT-TET: Can't start bluetooth.service")
             return
 
-    if not btnap_unit.is_active():
-        if btnap_unit.start():
-            logging.error("BT-TET: Can't start btnap.service")
-            return
-
     READY = True
 
 
-def on_epoch(agent, epoch, epoch_data):
+def on_ui_update(ui):
     """
     Try to connect to device
     """
+    # check check-interval is reached
+    global INTERVAL
+    if not INTERVAL >= OPTIONS['interval']:
+        INTERVAL += 1
+        return
+
+    # reset
+    INTERVAL = 0
+
     if READY:
-        ui = agent.view()
+        # Bluetooth should be running by now
         bluetoothctl = BluetoothController()
+        # Lets check if bnep0 iface is already there
+        btnap_iface = IfaceWrapper('bnep0')
+        if not btnap_iface.exists():
+            logging.info('BT-TETHER: Iface bnep0 does not exists yet.')
+            # not here yet
+            # configure & run
+            btnap_unit = SystemdUnitWrapper('btnap.service')
+
+            # lets put our mac into the config
+            _ensure_line_in_file('/etc/btnap.conf', r'^REMOTE_DEV=', f"REMOTE_DEV=\"{OPTIONS['mac']}\"")
+
+            logging.info("BT-TETHER: Look if %s is around", OPTIONS['mac'])
+            ui.set('bt', 'S?')
+            ui.update(force=True)
+            if bluetoothctl.look_for(OPTIONS['mac']):
+                ui.set('bt', 'S!')
+                ui.update(force=True)
+                logging.info('BT-TETHER: Try to restart btnap.service.')
+                if not btnap_unit.restart():
+                    logging.error('BT-TETHER: Restart failed')
+                    bluetoothctl.close()
+                    return # fck, cant restart
+
+        # bnep0 should be there by now
+        if btnap_iface.exists():
+            # check ip
+            if btnap_iface.get_ip() != OPTIONS['ip']:
+                logging.info("BT-TETHER: Set ip of bnep0 to %s", OPTIONS['ip'])
+                btnap_iface.set_ip(OPTIONS['ip'])
+
+            # check netmask
+            if btnap_iface.get_netmask() != OPTIONS['netmask']:
+                logging.info("BT-TETHER: Set netmask of bnep0 to %s", OPTIONS['netmask'])
+                btnap_iface.set_netmask(OPTIONS['netmask'])
+        else:
+            logging.error('BT-TETHER: bnep0 still not here ...')
+            bluetoothctl.close()
+            return
+
         if not bluetoothctl.is_paired(OPTIONS['mac']):
+            logging.info("BT-TETHER: Look if %s is around", OPTIONS['mac'])
             ui.set('bt', 'S?')
             ui.update(force=True)
             if bluetoothctl.look_for(OPTIONS['mac']):
                 ui.set('bt', 'P?')
                 ui.update(force=True)
+                logging.info("BT-TETHER: Trying to pair to %s", OPTIONS['mac'])
                 if bluetoothctl.pair(OPTIONS['mac']):
                     ui.set('bt', 'T?')
                     ui.update(force=True)
+                    logging.info("BT-TETHER: Trying to trust %s", OPTIONS['mac'])
                     if bluetoothctl.trust(OPTIONS['mac']):
+                        logging.info("BT-TETHER: Successful trusted  %s", OPTIONS['mac'])
                         ui.set('bt', 'T!')
                         ui.update(force=True)
         else:
             info = bluetoothctl.get_info(OPTIONS['mac'])
             if info:
                 if info['Trusted'] == 'no':
+                    logging.info("BT-TETHER: Trying to trust %s", OPTIONS['mac'])
                     ui.set('bt', 'T?')
                     ui.update(force=True)
                     if bluetoothctl.trust(OPTIONS['mac']):
+                        logging.info("BT-TETHER: Successful trusted  %s", OPTIONS['mac'])
                         ui.set('bt', 'T!')
                         ui.update(force=True)
 
                 elif info['Connected'] == 'no':
                     ui.set('bt', 'S?')
                     ui.update(force=True)
+                    logging.info("BT-TETHER: Look if %s is around", OPTIONS['mac'])
                     if bluetoothctl.look_for(OPTIONS['mac']):
+                        logging.info("BT-TETHER: Trying to connect to %s", OPTIONS['mac'])
                         ui.set('bt', 'C?')
                         ui.update(force=True)
                         if bluetoothctl.connect(OPTIONS['mac']):
+                            logging.info("BT-TETHER: Successful connected to %s", OPTIONS['mac'])
                             ui.set('bt', 'C!')
                             ui.update(force=True)
+
+
+        bluetoothctl.close()
 
 
 def on_ui_setup(ui):
