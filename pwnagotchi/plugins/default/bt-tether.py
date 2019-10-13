@@ -338,7 +338,7 @@ class IfaceWrapper:
         """
         Set the netmask
         """
-        process = subprocess.Popen(f"ip addr set {addr} dev {self.iface}", shell=True, stdin=None,
+        process = subprocess.Popen(f"ip addr add {addr} dev {self.iface}", shell=True, stdin=None,
                                   stdout=open("/dev/null", "w"), stderr=None, executable="/bin/bash")
         process.wait()
 
