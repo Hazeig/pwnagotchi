@@ -394,17 +394,17 @@ def on_ui_update(ui):
                 addr = f"{OPTIONS['ip']}/{OPTIONS['netmask']}"
 
                 if not btnap_iface.set_addr(addr):
-                    ui.set('bluetooth', 'ERR')
+                    ui.set('bluetooth', 'ERR1')
                     logging.error("Could not set ip of bnep0 to %s", addr)
                     return
 
-                ui.set('bluetooth', OPTIONS['ip'])
+                ui.set('bluetooth', 'CON')
             else:
-                ui.set('bluetooth', 'ERR')
+                ui.set('bluetooth', 'ERR2')
         else:
-            ui.set('bluetooth', 'NOT FOUND')
+            ui.set('bluetooth', 'NF')
 
 
 def on_ui_setup(ui):
-    ui.add_element('bluetooth', LabeledValue(color=BLACK, label='BT', value='-', position=(ui.width() / 2 - 40, 0),
+    ui.add_element('bluetooth', LabeledValue(color=BLACK, label='BT', value='-', position=(ui.width() / 2 - 30, 0),
                                        label_font=fonts.Bold, text_font=fonts.Medium))
