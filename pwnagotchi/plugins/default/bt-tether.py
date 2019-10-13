@@ -9,22 +9,228 @@ import time
 import re
 import logging
 import subprocess
+import dbus
 from pwnagotchi.ui.components import LabeledValue
 from pwnagotchi.ui.view import BLACK
 import pwnagotchi.ui.fonts as fonts
-#from pwnagotchi.utils import StatusFile
+from pwnagotchi.utils import StatusFile
 
 READY = False
-INTERVAL = 0
+INTERVAL = StatusFile('/root/.bt-tether')
 OPTIONS = dict()
 
 
-class BluetoothControllerExpection(Exception):
+class BTError(Exception):
     """
-    Just an exception
+    Custom bluetooth exception
     """
     pass
 
+class BTNap:
+    """
+    This class creates a bluetooth connection to the specified bt-mac
+
+    see https://github.com/bablokb/pi-btnap/blob/master/files/usr/local/sbin/btnap.service.py
+    """
+
+    IFACE_BASE = 'org.bluez'
+    IFACE_DEV = 'org.bluez.Device1'
+    IFACE_ADAPTER = 'org.bluez.Adapter1'
+    IFACE_PROPS = 'org.freedesktop.DBus.Properties'
+
+    def __init__(self, mac):
+        self._mac = mac
+
+
+    @staticmethod
+    def get_bus():
+        """
+        Get systembus obj
+        """
+        bus = getattr(BTNap.get_bus, 'cached_obj', None)
+        if not bus:
+            bus = BTNap.get_bus.cached_obj = dbus.SystemBus()
+        return bus
+
+    @staticmethod
+    def get_manager():
+        """
+        Get manager obj
+        """
+        manager = getattr(BTNap.get_manager, 'cached_obj', None)
+        if not manager:
+                manager = BTNap.get_manager.cached_obj = dbus.Interface(
+                        BTNap.get_bus().get_object(BTNap.IFACE_BASE, '/'),
+                        'org.freedesktop.DBus.ObjectManager' )
+        return manager
+
+    @staticmethod
+    def prop_get(obj, k, iface=None):
+        """
+        Get a property of the obj
+        """
+        if iface is None:
+            iface = obj.dbus_interface
+        return obj.Get(iface, k, dbus_interface=BTNap.IFACE_PROPS)
+
+    @staticmethod
+    def prop_set(obj, k, v, iface=None):
+        """
+        Set a property of the obj
+        """
+        if iface is None:
+            iface = obj.dbus_interface
+        return obj.Set(iface, k, v, dbus_interface=BTNap.IFACE_PROPS)
+
+
+    @staticmethod
+    def find_adapter(pattern=None):
+        """
+        Find the bt adapter
+        """
+
+        return BTNap.find_adapter_in_objects(BTNap.get_manager().GetManagedObjects(), pattern)
+
+    @staticmethod
+    def find_adapter_in_objects(objects, pattern=None):
+        """
+        Finds the obj with a pattern
+        """
+        bus, obj = BTNap.get_bus(), None
+        for path, ifaces in objects.items():
+                adapter = ifaces.get(BTNap.IFACE_ADAPTER)
+                if adapter is None:
+                    continue
+                if not pattern or pattern == adapter['Address'] or path.endswith(pattern):
+                        obj = bus.get_object(BTNap.IFACE_BASE, path)
+                        yield dbus.Interface(obj, BTNap.IFACE_ADAPTER)
+        if obj is None:
+                raise BTError('Bluetooth adapter not found')
+
+    @staticmethod
+    def find_device(device_address, adapter_pattern=None):
+        """
+        Finds the device
+        """
+        return BTNap.find_device_in_objects(BTNap.get_manager().GetManagedObjects(),
+                                            device_address, adapter_pattern)
+
+    @staticmethod
+    def find_device_in_objects(objects, device_address, adapter_pattern=None):
+        """
+        Finds the device in objects
+        """
+        bus = BTNap.get_bus()
+        path_prefix = ''
+        if adapter_pattern:
+            if not isinstance(adapter_pattern, str):
+                adapter = adapter_pattern
+            else:
+                adapter = BTNap.find_adapter_in_objects(objects, adapter_pattern)
+            path_prefix = adapter.object_path
+        for path, ifaces in objects.items():
+            device = ifaces.get(BTNap.IFACE_DEV)
+            if device is None:
+                continue
+            if device['Address'] == device_address and path.startswith(path_prefix):
+                obj = bus.get_object(BTNap.IFACE_BASE, path)
+                return dbus.Interface(obj, BTNap.IFACE_DEV)
+        raise BTError('Bluetooth device not found')
+
+    def power(self, on=True):
+        """
+        Set power of devices to on/off
+        """
+
+        devs = list(BTNap.find_adapter())
+        devs = dict((BTNap.prop_get(dev, 'Address'), dev) for dev in devs)
+
+        for dev_addr, dev in devs.items():
+            BTNap.prop_set(dev, 'Powered', on)
+            logging.debug('Set power of %s (addr %s) to %s', dev.object_path, dev_addr, str(on))
+
+        if devs:
+            return list(devs.values())[0]
+
+        return None
+
+    def wait_for_device(self, timeout=30):
+        """
+        Wait for device
+
+        returns device if found None if not
+        """
+        bt_dev = self.power(True)
+
+        if not bt_dev:
+            return None
+
+        # could be set to 0, so check if > -1
+        while timeout > -1:
+            try:
+                dev_remote = BTNap.find_device(self._mac, bt_dev)
+                logging.debug('Using remote device (addr: %s): %s',
+                    BTNap.prop_get(dev_remote, 'Address'), dev_remote.object_path )
+                return dev_remote
+            except BTError:
+                pass
+
+            time.sleep(1)
+            timeout -= 1
+
+        # Device not found :(
+        return None
+
+
+    def connect(self, reconnect=False):
+        """
+        Connect to device
+
+        return True if connected; False if failed
+        """
+
+        # power up devices
+        bt_dev = self.power(True)
+        if not bt_dev:
+            return False
+
+        # check if device is close
+        dev_remote = self.wait_for_device()
+
+        if not dev_remote:
+            return False
+
+        #wait_iter = lambda: time.sleep(3600)
+        # signal.signal(signal.SIGTERM, lambda sig,frm: sys.exit(0))
+
+        try:
+            dev_remote.ConnectProfile('nap')
+        except Exception:
+            pass
+
+        net = dbus.Interface(dev_remote, 'org.bluez.Network1')
+
+        try:
+            net.Connect('nap')
+        except dbus.exceptions.DBusException as err:
+            if err.get_dbus_name() != 'org.bluez.Error.Failed':
+                raise
+
+            connected = BTNap.prop_get(net, 'Connected')
+
+            if not connected:
+                return False
+
+            if reconnect:
+                net.Disconnect()
+                return self.connect(reconnect=False)
+
+            return True
+
+
+#################################################
+#################################################
+#################################################
 
 class SystemdUnitWrapper:
     """
@@ -104,118 +310,6 @@ class SystemdUnitWrapper:
         return SystemdUnitWrapper._action_on_unit('restart', self.unit)
 
 
-class BluetoothController:
-    """
-    Wraps bluetoothctl
-    """
-
-    PROMPT = '# '
-
-    def __init__(self):
-        import pexpect
-        self._process = pexpect.spawn("bluetoothctl", echo=False)
-        self.run("power on")
-
-    def close(self):
-        self._process.close()
-
-    def run(self, cmd, expect_str=None, wait=0):
-        """
-        Returns the output of the command
-        """
-        import pexpect
-        self._process.sendline(cmd)
-        time.sleep(wait)
-
-        if expect_str:
-            if self._process.expect([expect_str, 'org.bluez.Error', pexpect.EOF]):
-                raise BluetoothControllerExpection("Got an error while running %s" % cmd)
-        else:
-            self._process.expect_exact(BluetoothController.PROMPT)
-
-        result = self._process.before.decode('utf-8').split("\r\n")
-        for line in result:
-            if 'org.bluez.Error' in line:
-                raise BluetoothControllerExpection(line)
-
-        return result
-
-
-    def pair(self, mac):
-        """
-        Attempts to pair with a mac
-        """
-        try:
-            self.run(f"pair {mac}", expect_str="Request confirmation")
-            self.run(f"yes", expect_str="Pairing successful")
-            return True
-        except BluetoothControllerExpection:
-            return False
-
-    def connect(self, mac):
-        """
-        Attempts to pair with a mac
-        """
-        try:
-            self.run(f"connect {mac}", expect_str="Connection successful")
-            return True
-        except BluetoothControllerExpection:
-            return False
-
-    def get_paired(self):
-        """
-        Get list of paired macs
-        """
-        result = list()
-
-        for line in self.run('paired-devices'):
-            match = re.match(r'Device ((?:[0-9a-fA-F]:?){12}) .*', line)
-            if match:
-                result.append(match.groups()[0])
-        return result
-
-    def look_for(self, mac):
-        """
-        Look for mac
-        """
-        try:
-            self.run("scan on", expect_str=f"Device {mac}")
-            self.run("scan off")
-            return True
-        except BluetoothControllerExpection:
-            return False
-
-    def trust(self, mac):
-        """
-        Trust the device
-        """
-        try:
-            self.run(f"trust {mac}", expect_str="trust succeeded")
-            return True
-        except BluetoothControllerExpection:
-            return False
-
-    def get_info(self, mac):
-        """
-        Gets info about device
-        """
-        info = dict()
-        try:
-            result = self.run(f"info {mac}")
-            for line in result:
-                match = re.match(r'[ \t]*([^:]+?):[ \t]*(.+)$', line)
-                if match:
-                    info[match.groups()[0]] = match.groups()[1]
-            return info
-        except BluetoothControllerExpection:
-            return None
-
-    def is_paired(self, mac):
-        """
-        Check if mac is paired
-        """
-        return mac in self.get_paired()
-
 class IfaceWrapper:
     """
     Small wrapper to check and manage ifaces
@@ -240,97 +334,19 @@ class IfaceWrapper:
         return open(f"{self.path}/operstate", 'r').read().rsplit('\n') == 'up'
 
 
-    def set_netmask(self, netmask):
+    def set_addr(self, addr):
         """
         Set the netmask
         """
-        import socket, struct, fcntl, math, ctypes
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockfd = sock.fileno()
-        netmask = ctypes.c_uint32(~((2 ** (32 - netmask)) - 1)).value
-        nmbytes = socket.htonl(netmask)
-        ifreq = struct.pack('16sH2sI8s', self.iface.encode(), socket.AF_INET, b'\x00'*2, nmbytes, b'\x00'*8)
-
-        try:
-            fcntl.ioctl(sockfd, 0x891C, ifreq)
-        except Exception:
-            return False
-        return True
-
-    def get_netmask(self):
-        """
-        Get the netmask
-
-        example: 24
-        """
-        import socket, struct, fcntl, math, ctypes
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockfd = sock.fileno()
-        ifreq = struct.pack('16sH14s', self.iface.encode(), socket.AF_INET, b'\x00'*14)
-        try:
-            res = fcntl.ioctl(sockfd, 0x891B, ifreq)
-        except IOError:
-            return 0
-        netmask = socket.ntohl(struct.unpack('16sH2xI8x', res)[2])
-
-        return 32 - int(round(
-            math.log(ctypes.c_uint32(~netmask).value + 1, 2), 1))
-
-    def get_ip(self):
-        """
-        Get the ipaddr
-        """
-        import socket, struct, fcntl
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockfd = sock.fileno()
-        ifreq = struct.pack('16sH14s', self.iface.encode(), socket.AF_INET, b'\x00'*14)
-        try:
-            res = fcntl.ioctl(sockfd, 0x8915, ifreq)
-        except Exception:
-            return None
-        ip_addr = struct.unpack('16sH2x4s8x', res)[2]
-        return socket.inet_ntoa(ip_addr)
-
-
-    def set_ip(self, ip):
-        """
-        Add ip to iface
-        """
-        import socket, struct, fcntl
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        bin_ip = socket.inet_aton(ip)
-        ifreq = struct.pack('16sH2s4s8s', self.iface.encode(), socket.AF_INET, b'\x00' * 2, bin_ip, b'\x00' * 8)
-        try:
-            fcntl.ioctl(sock, 0x8916, ifreq)
-        except Exception:
-            return False
-        return True
-
-
-def _ensure_line_in_file(path, regexp, line):
-    """
-    Emulate ansibles lineinfile
-    """
-    search_regexp = re.compile(regexp)
-    changed = False
-
-    with open(path, 'r') as input_file, open(f"{path}.tmp", 'w') as output_file:
-        for old_line in input_file:
-            if search_regexp.search(old_line):
-                if old_line.rstrip('\n').strip() != line:
-                    output_file.write(line + '\n')
-                    changed = True
-            else:
-                output_file.write(old_line)
-    if changed:
-        process = subprocess.Popen(f"mv {path}.tmp {path}", shell=True, stdin=None,
+        process = subprocess.Popen(f"ip addr set {addr} dev {self.iface}", shell=True, stdin=None,
                                   stdout=open("/dev/null", "w"), stderr=None, executable="/bin/bash")
         process.wait()
 
-        if process.returncode == 0:
+        if process.returncode == 2 or process.returncode == 0: # 2 = already set
             return True
 
-    return False
+        return False
+
 
 def on_loaded():
     """
@@ -342,6 +358,11 @@ def on_loaded():
         if opt not in OPTIONS or (opt in OPTIONS and OPTIONS[opt] is None):
             logging.error("BT-TET: Pleace specify the %s in your config.yml.", opt)
             return
+
+    video_ip = OPTIONS['ui']['display']['video']['address']
+    if video_ip not in ['0.0.0.0', OPTIONS['ip']]:
+        logging.error("BT-TET: Set the option ui.display.video.address to 0.0.0.0 or %s", OPTIONS['ip'])
+        return
 
     # ensure bluetooth is running
     bt_unit = SystemdUnitWrapper('bluetooth.service')
@@ -357,102 +378,33 @@ def on_ui_update(ui):
     """
     Try to connect to device
     """
-    # check check-interval is reached
-    global INTERVAL
-    if not INTERVAL >= OPTIONS['interval']:
-        INTERVAL += 1
-        return
-
-    # reset
-    INTERVAL = 0
-
     if READY:
-        # Bluetooth should be running by now
-        bluetoothctl = BluetoothController()
-        # Lets check if bnep0 iface is already there
-        btnap_iface = IfaceWrapper('bnep0')
-        if not btnap_iface.exists():
-            logging.info('BT-TETHER: Iface bnep0 does not exists yet.')
-            # not here yet
-            # configure & run
-            btnap_unit = SystemdUnitWrapper('btnap.service')
-
-            # lets put our mac into the config
-            _ensure_line_in_file('/etc/btnap.conf', r'^REMOTE_DEV=', f"REMOTE_DEV=\"{OPTIONS['mac']}\"")
-
-            logging.info("BT-TETHER: Look if %s is around", OPTIONS['mac'])
-            ui.set('bt', 'S?')
-            ui.update(force=True)
-            if bluetoothctl.look_for(OPTIONS['mac']):
-                ui.set('bt', 'S!')
-                ui.update(force=True)
-                logging.info('BT-TETHER: Try to restart btnap.service.')
-                if not btnap_unit.restart():
-                    logging.error('BT-TETHER: Restart failed')
-                    bluetoothctl.close()
-                    return # fck, cant restart
-
-        # bnep0 should be there by now
-        if btnap_iface.exists():
-            # check ip
-            if btnap_iface.get_ip() != OPTIONS['ip']:
-                logging.info("BT-TETHER: Set ip of bnep0 to %s", OPTIONS['ip'])
-                btnap_iface.set_ip(OPTIONS['ip'])
-
-            # check netmask
-            if btnap_iface.get_netmask() != OPTIONS['netmask']:
-                logging.info("BT-TETHER: Set netmask of bnep0 to %s", OPTIONS['netmask'])
-                btnap_iface.set_netmask(OPTIONS['netmask'])
-        else:
-            logging.error('BT-TETHER: bnep0 still not here ...')
-            bluetoothctl.close()
+        global INTERVAL
+        if INTERVAL.newer_then_minutes(OPTIONS['interval']):
             return
 
-        if not bluetoothctl.is_paired(OPTIONS['mac']):
-            logging.info("BT-TETHER: Look if %s is around", OPTIONS['mac'])
-            ui.set('bt', 'S?')
-            ui.update(force=True)
-            if bluetoothctl.look_for(OPTIONS['mac']):
-                ui.set('bt', 'P?')
-                ui.update(force=True)
-                logging.info("BT-TETHER: Trying to pair to %s", OPTIONS['mac'])
-                if bluetoothctl.pair(OPTIONS['mac']):
-                    ui.set('bt', 'T?')
-                    ui.update(force=True)
-                    logging.info("BT-TETHER: Trying to trust %s", OPTIONS['mac'])
-                    if bluetoothctl.trust(OPTIONS['mac']):
-                        logging.info("BT-TETHER: Successful trusted  %s", OPTIONS['mac'])
-                        ui.set('bt', 'T!')
-                        ui.update(force=True)
+        INTERVAL.update()
+
+        bt = BTNap(OPTIONS['mac'])
+        if bt.connect():
+            btnap_iface = IfaceWrapper('bnep0')
+
+            if btnap_iface.exists():
+                # check ip
+                addr = f"{OPTIONS['ip']}/{OPTIONS['netmask']}"
+
+                if not btnap_iface.set_addr(addr):
+                    ui.set('bluetooth', 'ERR')
+                    logging.error("Could not set ip of bnep0 to %s", addr)
+                    return
+
+                ui.set('bluetooth', OPTIONS['ip'])
+            else:
+                ui.set('bluetooth', 'ERR')
         else:
-            info = bluetoothctl.get_info(OPTIONS['mac'])
-            if info:
-                if info['Trusted'] == 'no':
-                    logging.info("BT-TETHER: Trying to trust %s", OPTIONS['mac'])
-                    ui.set('bt', 'T?')
-                    ui.update(force=True)
-                    if bluetoothctl.trust(OPTIONS['mac']):
-                        logging.info("BT-TETHER: Successful trusted  %s", OPTIONS['mac'])
-                        ui.set('bt', 'T!')
-                        ui.update(force=True)
-
-                elif info['Connected'] == 'no':
-                    ui.set('bt', 'S?')
-                    ui.update(force=True)
-                    logging.info("BT-TETHER: Look if %s is around", OPTIONS['mac'])
-                    if bluetoothctl.look_for(OPTIONS['mac']):
-                        logging.info("BT-TETHER: Trying to connect to %s", OPTIONS['mac'])
-                        ui.set('bt', 'C?')
-                        ui.update(force=True)
-                        if bluetoothctl.connect(OPTIONS['mac']):
-                            logging.info("BT-TETHER: Successful connected to %s", OPTIONS['mac'])
-                            ui.set('bt', 'C!')
-                            ui.update(force=True)
-
-
-        bluetoothctl.close()
+            ui.set('bluetooth', 'NOT FOUND')
 
 
 def on_ui_setup(ui):
-    ui.add_element('bt', LabeledValue(color=BLACK, label='BT', value='-', position=(ui.width() / 2 - 25, 0),
+    ui.add_element('bluetooth', LabeledValue(color=BLACK, label='BT', value='-', position=(ui.width() / 2 - 25, 0),
                                        label_font=fonts.Bold, text_font=fonts.Medium))

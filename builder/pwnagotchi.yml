@@ -162,17 +162,6 @@
       path: /etc/dphys-swapfile
       content: "CONF_SWAPSIZE=1024"
 
-  - name: clone pi-btnap repository
-    git:
-      repo: https://github.com/bablokb/pi-btnap.git
-      dest: /usr/local/src/btnap
-
-  - name: install pi-btnap
-    shell: ./tools/install-btnap client
-    args:
-      chdir: /usr/local/src/btnap
-      creates: /etc/btnap.conf
-
   - name: clone papirus repository
     git:
       repo: https://github.com/repaper/gratis.git
