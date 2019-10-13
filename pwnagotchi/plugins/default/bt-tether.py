@@ -353,16 +353,12 @@ def on_loaded():
     Gets called when the plugin gets loaded
     """
     global READY
+    global INTERVAL
 
     for opt in ['mac', 'ip', 'netmask', 'interval']:
         if opt not in OPTIONS or (opt in OPTIONS and OPTIONS[opt] is None):
             logging.error("BT-TET: Pleace specify the %s in your config.yml.", opt)
             return
-
-    video_ip = OPTIONS['ui']['display']['video']['address']
-    if video_ip not in ['0.0.0.0', OPTIONS['ip']]:
-        logging.error("BT-TET: Set the option ui.display.video.address to 0.0.0.0 or %s", OPTIONS['ip'])
-        return
 
     # ensure bluetooth is running
     bt_unit = SystemdUnitWrapper('bluetooth.service')
@@ -371,6 +367,7 @@ def on_loaded():
             logging.error("BT-TET: Can't start bluetooth.service")
             return
 
+    INTERVAL.update()
     READY = True
 
 
@@ -378,6 +375,7 @@ def on_ui_update(ui):
     """
     Try to connect to device
     """
+
     if READY:
         global INTERVAL
         if INTERVAL.newer_then_minutes(OPTIONS['interval']):
