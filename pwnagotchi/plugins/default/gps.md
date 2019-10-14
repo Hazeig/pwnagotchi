@@ -8,9 +8,9 @@ license   | GPL3
 
 ### changelog
 
-version   | changes
-----------|----------
-1.0.0     | initial release
+date       | version  | changes
+-----------|----------|----------
+14.10.2019 | 1.0.0    | initial release
 
 ### options
 
