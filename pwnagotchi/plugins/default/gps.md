@@ -1,6 +1,5 @@
 ## gps
 
-          |
 ----------|-------
 author    | evilsocket@gmail.com
 version   | 1.0.0
