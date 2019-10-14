@@ -1,6 +1,6 @@
 ## gps
 
-[]()      |
+info      | data
 ----------|-----------------------
 author    | evilsocket@gmail.com
 version   | 1.0.0
