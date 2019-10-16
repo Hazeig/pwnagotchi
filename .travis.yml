@@ -28,8 +28,7 @@ branches:
     - "/^dadav-.*$/"
 before_script:
   - sudo apt-get -y update || true
-  - sudo apt-get -y install qemu-system-arm qemu-user-static binfmt-support bmap-tools
-    kpartx
+  - sudo apt-get -y install qemu-system-arm qemu-user-static binfmt-support bmap-tools kpartx
   - sudo update-binfmts --display
 script:
   - sudo make clean
