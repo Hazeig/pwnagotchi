@@ -1,6 +1,8 @@
 import os
 import glob
 import _thread
+import threading
+import functools
 import importlib, importlib.util
 import logging
 from pwnagotchi.ui import view
@@ -9,6 +11,15 @@ default_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defaul
 loaded = {}
 database = {}
 
+def add_lock(wrapped):
+    lock = threading.Lock()
+
+    @functools.wraps(wrapped)
+    def _wrap(*args, **kwargs):
+        with lock:
+            return wrapped(*args, **kwargs)
+    return _wrap
+
 class Plugin:
     @classmethod
     def __init_subclass__(cls, **kwargs):
@@ -16,8 +27,19 @@ class Plugin:
         global loaded
         plugin_name = cls.__module__.split('.')[0]
         plugin_instance = cls()
+
+        # get all method names that dont start with __
+        method_list = [func for func in dir(plugin_instance)
+                       if callable(getattr(plugin_instance, func)) and not func.startswith("__")]
+
+        # add a lock
+        for method in method_list:
+            locked_method = add_lock(method)
+            setattr(plugin_instance, method.__name__, locked_method)
+
         logging.debug("loaded plugin %s as %s" % (plugin_name, plugin_instance))
         loaded[plugin_name] = plugin_instance
+
 
 def toggle_plugin(name, enable=True):
     """
