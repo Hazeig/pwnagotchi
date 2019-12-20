@@ -15,4 +15,4 @@ before_script:
 script:
   - sudo make clean
   - sudo -E env "PATH=$PATH" make install
-  - sudo make image -e PWN_HOSTNAME=pwnagotchi PWN_VERSION=$TRAVIS_TAG
+  - travis_wait 45 sudo make image -e PWN_HOSTNAME=pwnagotchi PWN_VERSION=$TRAVIS_TAG
