@@ -347,6 +347,10 @@ def extract_from_pcap(path, fields):
 
     return results
 
+def get_installed_packages():
+    from apt import Cache
+    return [pkg.name for pkg in Cache() if pkg.is_installed]
+
 @contextlib.contextmanager
 def ensure_write(filename, mode='w'):
     path = os.path.dirname(filename)

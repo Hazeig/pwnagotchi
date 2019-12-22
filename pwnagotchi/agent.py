@@ -14,6 +14,7 @@ from pwnagotchi.log import LastSession
 from pwnagotchi.bettercap import Client
 from pwnagotchi.mesh.utils import AsyncAdvertiser
 from pwnagotchi.ai.train import AsyncTrainer
+from pwnagotchi import Globals
 
 RECOVERY_DATA_FILE = '/root/.pwnagotchi-recovery'
 
@@ -80,6 +81,29 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
         self.run('set wifi.handshakes.file %s' % self._config['bettercap']['handshakes'])
         self.run('set wifi.handshakes.aggregate false')
 
+    def stop_monitor_mode(self):
+        mon_iface = self._config['main']['iface']
+        mon_stop_cmd = self._config['main']['mon_stop_cmd']
+        wifi_running = self.is_module_running('wifi')
+
+        if wifi_running:
+            self.stop_module('wifi.recon')
+
+        while True:
+            s = self.session()
+            matching_interfaces = [iface for iface in s['interfaces'] if iface == mon_iface]
+            if matching_interfaces:
+                if mon_stop_cmd is not None and mon_stop_cmd != '':
+                    logging.info("stoping monitor interface ...")
+                    self.run('!%s' % mon_stop_cmd)
+                else:
+                    logging.info("no stop command given...")
+                    break
+            else:
+                logging.info("monitor interface stopped...")
+                break
+
+
     def start_monitor_mode(self):
         mon_iface = self._config['main']['iface']
         mon_start_cmd = self._config['main']['mon_start_cmd']
@@ -137,6 +161,12 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
         # print initial stats
         self.next_epoch()
         self.set_ready()
+
+    def pause(self):
+        Globals.running = False
+
+    def cont(self):
+        Globals.running = True
 
     def recon(self):
         recon_time = self._config['personality']['recon_time']
@@ -309,6 +339,10 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
         self.run('events.clear')
 
         while True:
+            while not Globals.running:
+                # pause
+                time.sleep(1)
+
             time.sleep(1)
 
             new_shakes = 0
@@ -367,6 +401,9 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
 
     def start_module(self, module):
         self.run('%s on' % module)
+
+    def stop_module(self, module):
+        self.run('%s off' % module)
 
     def restart_module(self, module):
         self.run('%s off; %s on' % (module, module))

@@ -14,6 +14,7 @@ from pwnagotchi.identity import KeyPair
 from pwnagotchi.agent import Agent
 from pwnagotchi.ui.display import Display
 from pwnagotchi import restart
+from pwnagotchi import Globals
 
 
 def do_clear(display):
@@ -52,6 +53,9 @@ def do_auto_mode(agent):
 
     while True:
         try:
+            while not Globals.running:
+                # pause
+                time.sleep(1)
             # recon on all channels
             agent.recon()
             # get nearby access points grouped by channel

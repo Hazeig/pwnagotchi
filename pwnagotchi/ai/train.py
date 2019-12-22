@@ -8,6 +8,7 @@ import logging
 
 import pwnagotchi.plugins as plugins
 import pwnagotchi.ai as ai
+from pwnagotchi import Globals
 
 
 class Stats(object):
@@ -168,6 +169,10 @@ class AsyncTrainer(object):
 
             obs = None
             while True:
+                while not Globals.running:
+                    # pause
+                    time.sleep(1)
+
                 self._model.env.render()
                 # enter in training mode?
                 if random.random() > self._config['ai']['laziness']:
