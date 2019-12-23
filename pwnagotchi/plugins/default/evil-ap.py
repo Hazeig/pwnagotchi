@@ -301,8 +301,14 @@ class EvilAp(plugins.Plugin):
             return
 
         cfg = agent.config()
+        display = agent.view()
+
+        display.set('status', 'Pause pwning, starting evil AP')
+        display.set('face', 'ψ(｀∇´)ψ')
+        display.update(force=True)
 
         logging.debug("[evil-ap] Unit is sad, let's change that.")
+
         # steps:
         ## 1. pause bettercap and auto/ai mode
         agent.pause()
@@ -310,7 +316,7 @@ class EvilAp(plugins.Plugin):
         agent.stop_monitor_mode()
 
         ## 2. start dnsmasq, hostapd and some fake-login-site
-        logging.debug("[evil-ap] Starting Fake-AP...")
+        logging.debug("[evil-ap] Starting Evil-AP...")
 
         # set gateway and webserver-ip to iface
         for ip in [self.options['gateway'], self.options['webserver']]:
@@ -349,6 +355,8 @@ class EvilAp(plugins.Plugin):
         hostapd_proc.communicate(input=str.encode(hostap_cfg))
 
         ## 3. wait for user input (use a timeout like 15 mins)
+        display.set('status', f"Evil AP is running for {self.options['time']/60} mins")
+        display.update(force=True)
         time.sleep(self.options['time'])
 
         ## 4. switch back to pwnagotchi mode
