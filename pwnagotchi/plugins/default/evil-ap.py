@@ -301,7 +301,7 @@ class EvilAp(plugins.Plugin):
         self.ready = EvilAp.check_requirements()
         logging.info("[evil-ap] %s", "is loaded." if self.ready else "could not be loaded (missing required packages).")
 
-    def on_sad(self, agent):
+    def on_bored(self, agent):
         if not self.ready:
             return
 
