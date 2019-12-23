@@ -258,9 +258,7 @@ class FischHttpHandler(BaseHTTPRequestHandler):
             except Exception as ex:
                 logging.error(ex)
 
-        self.send_response(302)
-        self.send_header('Location', 'http://free-wifi.net')
-        self.end_headers()
+        self.send_error(404)
 
 class FischThread(threading.Thread):
     def __init__(self, webserver, *args, **kwargs):
