@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 import subprocess
@@ -282,10 +283,10 @@ class EvilAp(plugins.Plugin):
         return requirements.issubset(installed)
 
     def on_loaded(self):
-        self.ready = EvilAp.check_requirements()
-        logging.info("[evil-ap] %s", "is loaded." if self.ready else "could not be loaded (missing required packages).")
+        logging.info("[evil-ap] is loaded.")
 
     def on_ready(self, agent):
+        self.ready = EvilAp.check_requirements() and os.path.exists("/sys/class/net/{}".format(self.options['iface']))
         if not self.ready:
             return
 
