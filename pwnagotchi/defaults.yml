@@ -15,15 +15,9 @@ main:
     plugins:
         evil-ap:
           enabled: true
-          iface: wlan0
-          gateway: 192.168.4.1
-          dns-server: 192.168.4.1
-          webserver: 192.168.4.10
-          port: 80 # port to serve webserver on
-          time: 300 # 5 mins
-          dhcp-min: 192.168.4.2
-          dhcp-max: 192.168.4.100
-          dhcp-netmask: 255.255.255.0
+          iface: wlan1
+          driver: nl80211
+          ssid: banana
         grid:
             enabled: true
             report: false # don't report pwned networks by default!

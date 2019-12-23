@@ -10,9 +10,6 @@ version = '1.4.3'
 
 _name = None
 
-class Globals:
-    running = True
-
 def set_name(new_name):
     if new_name is None:
         return

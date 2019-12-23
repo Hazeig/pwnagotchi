@@ -8,8 +8,6 @@ import pwnagotchi.ui.faces as faces
 import pwnagotchi.plugins as plugins
 import pwnagotchi.grid as grid
 from pwnagotchi.mesh.peer import Peer
-from pwnagotchi import Globals
-
 
 class AsyncAdvertiser(object):
     def __init__(self, config, view, keypair):
@@ -72,9 +70,6 @@ class AsyncAdvertiser(object):
         # due to nearby units will be rendered properly
         time.sleep(20)
         while True:
-            while not Globals.running:
-                # pause
-                time.sleep(1)
             try:
                 logging.debug("polling pwngrid-peer for peers ...")
 
