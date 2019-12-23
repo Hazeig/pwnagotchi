@@ -304,7 +304,7 @@ class EvilAp(plugins.Plugin):
         display = agent.view()
 
         display.set('status', 'Pause pwning, starting evil AP')
-        display.set('face', 'ψ(｀∇´)ψ')
+        display.set('face', '( •̀ᴗ•́ )')
         display.update(force=True)
 
         logging.debug("[evil-ap] Unit is sad, let's change that.")
