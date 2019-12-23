@@ -334,7 +334,8 @@ class EvilAp(plugins.Plugin):
         if bettercap_http:
             agent.stop_module('http.server')
         web = HTTPServer((self.options['webserver'], self.options['port']), FischHttpHandler)
-        web_thread = FischThread(web).start()
+        web_thread = FischThread(web)
+        web_thread.start()
 
         dev_null = open("/dev/null", "w")
         dnsmasq = [
