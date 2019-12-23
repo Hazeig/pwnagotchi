@@ -91,7 +91,7 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
 
         while True:
             s = self.session()
-            matching_interfaces = [iface for iface in s['interfaces'] if iface == mon_iface]
+            matching_interfaces = [iface for iface in s['interfaces'] if iface['name'] == mon_iface]
             if matching_interfaces:
                 if mon_stop_cmd is not None and mon_stop_cmd != '':
                     logging.info("stoping monitor interface ...")
