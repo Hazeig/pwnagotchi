@@ -1,3 +1,5 @@
+# vim: ai et ts=2 sw=2 sts=2
+
 main.name = ""
 main.lang = "en"
 main.custom_plugins = ""
@@ -13,7 +15,6 @@ main.whitelist = [
   "fo:od:ba"
 ]
 main.filter = ""
-
 
 main.plugins.grid.enabled = true
 main.plugins.grid.report = false
