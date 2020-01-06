@@ -365,16 +365,6 @@ class Agent(Client, Automata, AsyncAdvertiser, AsyncTrainer):
                 return m['running']
         return False
 
-    def position(self):
-        s = self.session()
-        try:
-            data = s['gps']
-            return data['Latitude'], data['Longitude']
-        except Exception as ex:
-            logging.error("error: %s", ex)
-
-        return 0.0, 0.0
-
     def start_module(self, module):
         self.run('%s on' % module)
 
