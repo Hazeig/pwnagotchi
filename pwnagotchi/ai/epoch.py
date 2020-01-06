@@ -237,5 +237,6 @@ class Epoch(object):
         position = pwnagotchi.position()
         distance = utils.distance((self.latitude, self.longitude), #old
                                   (position[0],position[1])) #new
-        self.speed = (distance / self.epoch_duration) if distance > 0 else 0.0
+        # convert to miles/km per hour
+        self.speed = ((distance / self.epoch_duration) * 60 * 60) if distance > 0 else 0.0
         self.latitude, self.longitude = position
