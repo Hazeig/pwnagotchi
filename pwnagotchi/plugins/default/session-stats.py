@@ -44,15 +44,15 @@ TEMPLATE = """
 	return ret;
       };
 
-      function loadData(url, elm, title) {
+      function loadData(url, elm, title, fill) {
           var data = ajaxDataRenderer(url);
           var plot_os = $.jqplot(elm, data.values,{
             title: title,
             stackSeries: true,
             seriesDefaults: {
                 showMarker: false,
-                fill: true,
-                fillAndStroke: true
+                fill: fill,
+                fillAndStroke: fill
             },
             legend: {
                 show: true,
@@ -98,12 +98,12 @@ TEMPLATE = """
       }
 
       function loadAll() {
-          loadData('/plugins/session-stats/os', 'chart_os', 'OS')
-          loadData('/plugins/session-stats/temp', 'chart_temp', 'Temp')
-          loadData('/plugins/session-stats/nums', 'chart_nums', 'Wifi')
-          loadData('/plugins/session-stats/duration', 'chart_duration', 'Sleeping')
-          loadData('/plugins/session-stats/epoch', 'chart_epoch', 'Epochs')
-          loadData('/plugins/session-stats/location', 'chart_loc', 'Location')
+          loadData('/plugins/session-stats/os', 'chart_os', 'OS', false)
+          loadData('/plugins/session-stats/temp', 'chart_temp', 'Temp', false)
+          loadData('/plugins/session-stats/nums', 'chart_nums', 'Wifi', true)
+          loadData('/plugins/session-stats/duration', 'chart_duration', 'Sleeping', true)
+          loadData('/plugins/session-stats/epoch', 'chart_epoch', 'Epochs', false)
+          loadData('/plugins/session-stats/location', 'chart_loc', 'Location', false)
       }
 
       loadAll();
