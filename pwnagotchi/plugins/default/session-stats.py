@@ -48,9 +48,9 @@ TEMPLATE = """
           var data = ajaxDataRenderer(url);
           var plot_os = $.jqplot(elm, data.values,{
             title: title,
-            stackSeries: true,
+            stackSeries: fill,
             seriesDefaults: {
-                showMarker: false,
+                showMarker: !fill,
                 fill: fill,
                 fillAndStroke: fill
             },
