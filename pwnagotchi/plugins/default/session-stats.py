@@ -186,9 +186,8 @@ class SessionStats(plugins.Plugin):
             ]
         elif path == "epoch":
             extract_keys = [
-                'blind_for_epochs',
-                'inactive_for_epochs',
                 'active_for_epochs',
+                'blind_for_epochs',
             ]
         elif path == "location":
             extract_keys = [
