@@ -103,6 +103,7 @@ TEMPLATE = """
           loadData('/plugins/session-stats/nums', 'chart_nums', 'Wifi')
           loadData('/plugins/session-stats/duration', 'chart_duration', 'Sleeping')
           loadData('/plugins/session-stats/epoch', 'chart_epoch', 'Epochs')
+          loadData('/plugins/session-stats/location', 'chart_loc', 'Location')
       }
 
       loadAll();
@@ -116,6 +117,7 @@ TEMPLATE = """
     <div id="chart_nums" style="height:400px;width:100%; "></div>
     <div id="chart_duration" style="height:400px;width:100%; "></div>
     <div id="chart_epoch" style="height:400px;width:100%; "></div>
+    <div id="chart_loc" style="height:400px;width:100%; "></div>
 {% endblock %}
 """
 
@@ -187,6 +189,10 @@ class SessionStats(plugins.Plugin):
                 'blind_for_epochs',
                 'inactive_for_epochs',
                 'active_for_epochs',
+            ]
+        elif path == "location":
+            extract_keys = [
+                'speed',
             ]
 
 
