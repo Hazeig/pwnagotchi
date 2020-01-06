@@ -135,6 +135,7 @@ if __name__ == '__main__':
         exit(0)
 
     agent = Agent(view=display, config=config, keypair=KeyPair(view=display))
+    setattr(pwnagotchi, '_agent', agent)
 
     def usr1_handler(*unused):
         logging.info('Received USR1 singal. Restart process ...')
