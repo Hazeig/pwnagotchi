@@ -34,6 +34,12 @@ def describe(extended=False):
                             # assocs
                             1 +
                             # handshakes
+                            1 +
+                            # latitude
+                            1 +
+                            # longitude
+                            1 +
+                            # speed
                             1)
 
 
@@ -63,4 +69,10 @@ def featurize(state, step):
         [state['num_associations'] / tot_interactions],
         # handshakes
         [state['num_handshakes'] / tot_interactions],
+        # latitude
+        [state['latitude']],
+        # longitude
+        [state['longitude']],
+        # speed
+        [state['speed']]
     ))

@@ -48,7 +48,7 @@ class Environment(gym.Env):
             'reward': 0.0,
             'observation': None,
             'policy': None,
-            'params': {},
+            'params': dict(),
             'state': None,
             'state_v': None
         }
@@ -64,11 +64,11 @@ class Environment(gym.Env):
     @staticmethod
     def policy_to_params(policy):
         num = len(policy)
-        params = {}
+        params = dict()
 
         assert len(Environment.params) == num
 
-        channels = []
+        channels = list()
 
         for i in range(num):
             param = Environment.params[i]
@@ -111,7 +111,7 @@ class Environment(gym.Env):
 
         self._agent.on_ai_step()
 
-        return self.last['state_v'], self.last['reward'], not self._agent.is_training(), {}
+        return self.last['state_v'], self.last['reward'], not self._agent.is_training(), dict()
 
     def reset(self):
         # logging.info("[ai] resetting environment ...")

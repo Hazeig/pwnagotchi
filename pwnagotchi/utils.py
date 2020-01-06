@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from math import radians, cos, sin, asin, sqrt
 import logging
 import glob
 import os
@@ -263,6 +264,23 @@ def blink(times=1, delay=0.3):
         time.sleep(delay)
     led(True)
 
+def distance(pos1, pos2, metric='km'):
+    """
+    see https://stackoverflow.com/questions/4913349/haversine-formula-in-python-bearing-and-distance-between-two-gps-points/4913653#4913653
+    """
+    lat1, lon1 = pos1
+    lat2, lon2 = pos2
+    # convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    r = 6371 if metric == 'km' else 3959
+
+    # haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+
+    return c * r
 
 class WifiInfo(Enum):
     """

@@ -51,6 +51,16 @@ def name():
             _name = fp.read().strip()
     return _name
 
+def position():
+    if not hasattr(pwnagotchi, '_agent'):
+        return 0.0, 0.0
+    try:
+        s = pwnagotchi._agent.session()
+        pos = s['gps']
+        return float(pos['Latitude']), float(pos['Longitude'])
+    except Exception:
+        return 0.0, 0.0
+
 
 def uptime():
     with open('/proc/uptime') as fp:
@@ -96,7 +106,6 @@ def temperature(celsius=True):
         temp = int(fp.read().strip())
     c = int(temp / 1000)
     return c if celsius else ((c * (9 / 5)) + 32)
-
 
 def shutdown():
     logging.warning("shutting down ...")

@@ -58,9 +58,12 @@ class Epoch(object):
             'peers_histogram': [0.0] * wifi.NumChannels
         }
         self._observation_ready = threading.Event()
-        self._epoch_data = {}
+        self._epoch_data = dict()
         self._epoch_data_ready = threading.Event()
         self._reward = RewardFunction()
+        self.latitude = 0.0
+        self.longitude = 0.0
+        self.speed = 0.0
 
     def wait_for_epoch_data(self, with_observation=True, timeout=None):
         # if with_observation:
@@ -162,7 +165,6 @@ class Epoch(object):
         cpu = pwnagotchi.cpu_load()
         mem = pwnagotchi.mem_usage()
         temp = pwnagotchi.temperature()
-
         self.epoch_duration = now - self.epoch_started
 
         # cache the state of this epoch for other threads to read
@@ -182,7 +184,10 @@ class Epoch(object):
             'num_handshakes': self.num_shakes,
             'cpu_load': cpu,
             'mem_usage': mem,
-            'temperature': temp
+            'temperature': temp,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'speed': self.speed
         }
 
         self._epoch_data['reward'] = self._reward(self.epoch + 1, self._epoch_data)
@@ -190,7 +195,7 @@ class Epoch(object):
 
         logging.info("[epoch %d] duration=%s slept_for=%s blind=%d inactive=%d active=%d peers=%d tot_bond=%.2f "
                      "avg_bond=%.2f hops=%d missed=%d deauths=%d assocs=%d handshakes=%d cpu=%d%% mem=%d%% "
-                     "temperature=%dC reward=%s" % (
+                     "temperature=%dC reward=%s latitude=%.2f longitude=%.2f speed=%.2f" % (
                          self.epoch,
                          utils.secs_to_hhmmss(self.epoch_duration),
                          utils.secs_to_hhmmss(self.num_slept),
@@ -208,7 +213,10 @@ class Epoch(object):
                          cpu * 100,
                          mem * 100,
                          temp,
-                         self._epoch_data['reward']))
+                         self._epoch_data['reward'],
+                         self.latitude,
+                         self.longitude,
+                         self.speed))
 
         self.epoch += 1
         self.epoch_started = now
@@ -225,3 +233,9 @@ class Epoch(object):
         self.num_hops = 0
         self.num_slept = 0
         self.any_activity = False
+        # set current position and speed
+        position = pwnagotchi.position()
+        distance = utils.distance((self.latitude, self.longitude), #old
+                                  (position[0],position[1])) #new
+        self.speed = (distance / self.epoch_duration) if distance > 0 else 0.0
+        self.latitude, self.longitude = position
