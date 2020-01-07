@@ -109,7 +109,10 @@ TEMPLATE = """
     }
 
     function loadSessionFiles() {
-        loadFiles('plugins/session-stats/session', 'session')
+        loadFiles('/plugins/session-stats/session', 'session');
+        $("#session").change(function() {
+            loadSessionData();
+        });
     }
 
     function loadSessionData() {
@@ -228,7 +231,7 @@ class SessionStats(plugins.Plugin):
 
         with self.lock:
             data = self.stats
-            if session_param:
+            if session_param and session_param != 'Current':
                 file_stats = StatusFile(os.path.join(self.options['save_directory'], session_param), data_format='json')
                 data = file_stats.data_field_or('data', default=dict())
             return jsonify(SessionStats.extract_key_values(data, extract_keys))
