@@ -3,6 +3,7 @@ import logging
 import threading
 from datetime import datetime
 from pwnagotchi import plugins
+from pwnagotchi.utils import StatusFile
 from flask import render_template_string
 from flask import jsonify
 
@@ -31,87 +32,108 @@ TEMPLATE = """
 
 {% block script %}
     $(document).ready(function(){
-      var ajaxDataRenderer = function(url, plot, options) {
-	var ret = null;
-	$.ajax({
-	  async: false,
-	  url: url,
-	  dataType:"json",
-	  success: function(data) {
-	    ret = data;
-	  }
-	});
-	return ret;
-      };
-
-      function loadData(url, elm, title, fill) {
-          var data = ajaxDataRenderer(url);
-          var plot_os = $.jqplot(elm, data.values,{
-            title: title,
-            stackSeries: fill,
-            seriesDefaults: {
-                showMarker: !fill,
-                fill: fill,
-                fillAndStroke: fill
-            },
-            legend: {
-                show: true,
-                renderer: $.jqplot.EnhancedLegendRenderer,
-                placement: 'outsideGrid',
-                labels: data.labels,
-                location: 's',
-                rendererOptions: {
-                  numberRows: '2',
-                },
-                rowSpacing: '0px'
-            },
-            axes:{
-                xaxis:{
-                    renderer:$.jqplot.DateAxisRenderer,
-                    tickOptions:{formatString:'%H:%M:%S'}
-                },
-                yaxis:{
-                    min: 0,
-                    tickOptions:{formatString:'%.2f'}
-                }
-            },
-            highlighter: {
-                show: true,
-                sizeAdjust: 7.5
-            },
-            cursor:{
-                show: true,
-                tooltipLocation:'sw'
+        var ajaxDataRenderer = function(url, plot, options) {
+        var ret = null;
+        $.ajax({
+            async: false,
+            url: url,
+            dataType:"json",
+            success: function(data) {
+                ret = data;
             }
-          }).replot({
-            axes:{
-                xaxis:{
-                    renderer:$.jqplot.DateAxisRenderer,
-                    tickOptions:{formatString:'%H:%M:%S'}
-                },
-                yaxis:{
-                    min: 0,
-                    tickOptions:{formatString:'%.2f'}
-                }
+        });
+        return ret;
+        };
+
+    function loadFiles(url, elm) {
+        var data = ajaxDataRenderer(url);
+        var x = document.getElementById(elm);
+        $.each(data['files'], function( index, value ) {
+            var option = document.createElement("option");
+            option.text = value;
+            x.add(option);
+        });
+    }
+
+    function loadData(url, elm, title, fill) {
+        var data = ajaxDataRenderer(url);
+        var plot_os = $.jqplot(elm, data.values,{
+        title: title,
+        stackSeries: fill,
+        seriesDefaults: {
+            showMarker: !fill,
+            fill: fill,
+            fillAndStroke: fill
+        },
+        legend: {
+            show: true,
+            renderer: $.jqplot.EnhancedLegendRenderer,
+            placement: 'outsideGrid',
+            labels: data.labels,
+            location: 's',
+            rendererOptions: {
+                numberRows: '2',
+            },
+            rowSpacing: '0px'
+        },
+        axes:{
+            xaxis:{
+                renderer:$.jqplot.DateAxisRenderer,
+                tickOptions:{formatString:'%H:%M:%S'}
+            },
+            yaxis:{
+                min: 0,
+                tickOptions:{formatString:'%.2f'}
             }
-            });
-      }
+        },
+        highlighter: {
+            show: true,
+            sizeAdjust: 7.5
+        },
+        cursor:{
+            show: true,
+            tooltipLocation:'sw'
+        }
+        }).replot({
+        axes:{
+            xaxis:{
+                renderer:$.jqplot.DateAxisRenderer,
+                tickOptions:{formatString:'%H:%M:%S'}
+            },
+            yaxis:{
+                min: 0,
+                tickOptions:{formatString:'%.2f'}
+            }
+        }
+        });
+    }
 
-      function loadAll() {
-          loadData('/plugins/session-stats/os', 'chart_os', 'OS', false)
-          loadData('/plugins/session-stats/temp', 'chart_temp', 'Temp', false)
-          loadData('/plugins/session-stats/nums', 'chart_nums', 'Wifi', true)
-          loadData('/plugins/session-stats/duration', 'chart_duration', 'Sleeping', true)
-          loadData('/plugins/session-stats/epoch', 'chart_epoch', 'Epochs', false)
-          loadData('/plugins/session-stats/location', 'chart_loc', 'Location', false)
-      }
+    function loadSessionFiles() {
+        loadFiles('plugins/session-stats/session', 'session')
+    }
 
-      loadAll();
-      setInterval(loadAll, 60000);
+    function loadSessionData() {
+        var x = document.getElementById("session");
+        var session = x.options[x.selectedIndex].text;
+        loadData('/plugins/session-stats/os' + '?session=' + session, 'chart_os', 'OS', false)
+        loadData('/plugins/session-stats/temp' + '?session=' + session, 'chart_temp', 'Temp', false)
+        loadData('/plugins/session-stats/nums' + '?session=' + session, 'chart_nums', 'Wifi', true)
+        loadData('/plugins/session-stats/duration' + '?session=' + session, 'chart_duration', 'Sleeping', true)
+        loadData('/plugins/session-stats/epoch' + '?session=' + session, 'chart_epoch', 'Epochs', false)
+        loadData('/plugins/session-stats/location', 'chart_loc' + '?session=' + session, 'Location', false)
+    }
+
+
+    loadSessionFiles();
+    loadSessionData();
+    setInterval(loadSessionData, 60000);
     });
 {% endblock %}
 
 {% block content %}
+    <select id="session" style="width:100%;">
+        <option selected>Current</option>
+    </select>
     <div id="chart_os" style="height:400px;width:100%; "></div>
     <div id="chart_temp" style="height:400px;width:100%; "></div>
     <div id="chart_nums" style="height:400px;width:100%; "></div>
@@ -132,12 +154,17 @@ class SessionStats(plugins.Plugin):
         self.lock = threading.Lock()
         self.options = dict()
         self.stats = dict()
+        self.session_name = "stats_{}.json".format(datetime.now().strftime("%Y_%m_%d_%H_%M"))
 
     def on_loaded(self):
         """
         Gets called when the plugin gets loaded
         """
         logging.info("Session-stats plugin loaded.")
+        os.makedirs(self.options['save_directory'], exist_ok=True)
+        self.session = StatusFile(os.path.join(self.options['save_directory'],
+                                               self.session_name),
+                                  data_format='json')
         self.ready = True
 
     def on_unloaded(self, ui):
@@ -149,6 +176,7 @@ class SessionStats(plugins.Plugin):
         """
         with self.lock:
             self.stats[datetime.now().strftime("%H:%M:%S")] = epoch_data
+            self.session.update(data={'data': self.stats})
 
     @staticmethod
     def extract_key_values(data, subkeys):
@@ -163,6 +191,8 @@ class SessionStats(plugins.Plugin):
     def on_webhook(self, path, request):
         if not path or path == "/":
             return render_template_string(TEMPLATE)
+
+        session_param = request.args.get('session')
 
         if path == "os":
             extract_keys = ['cpu_load','mem_usage',]
@@ -193,8 +223,12 @@ class SessionStats(plugins.Plugin):
             extract_keys = [
                 'speed',
             ]
-
-
+        elif path == "session":
+            return jsonify({'files': os.listdir(self.options['save_directory'])})
 
         with self.lock:
-            return jsonify(SessionStats.extract_key_values(self.stats, extract_keys))
+            data = self.stats
+            if session_param:
+                file_stats = StatusFile(os.path.join(self.options['save_directory'], session_param), data_format='json')
+                data = file_stats.data_field_or('data', default=dict())
+            return jsonify(SessionStats.extract_key_values(data, extract_keys))
