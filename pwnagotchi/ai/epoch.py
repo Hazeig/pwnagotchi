@@ -235,8 +235,10 @@ class Epoch(object):
         self.any_activity = False
         # set current position and speed
         position = pwnagotchi.position()
-        distance = utils.distance((self.latitude, self.longitude), #old
-                                  (position[0],position[1])) #new
+        distance = utils.distance((self.latitude, self.longitude), # old
+                                  (position[0],position[1])) # new
         # convert to miles/km per hour
-        self.speed = ((distance / self.epoch_duration) * 60 * 60) if distance > 0 else 0.0
+        speed = ((distance / self.epoch_duration) * 60 * 60) if distance > 0 else 0.0
+        # limit to 100 km/h, because it wouldnt capture stuff anyway
+        self.speed = speed if speed < 100 else 0.0
         self.latitude, self.longitude = position
