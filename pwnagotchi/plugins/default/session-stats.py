@@ -123,7 +123,7 @@ TEMPLATE = """
         loadData('/plugins/session-stats/nums' + '?session=' + session, 'chart_nums', 'Wifi', true)
         loadData('/plugins/session-stats/duration' + '?session=' + session, 'chart_duration', 'Sleeping', true)
         loadData('/plugins/session-stats/epoch' + '?session=' + session, 'chart_epoch', 'Epochs', false)
-        loadData('/plugins/session-stats/location', 'chart_loc' + '?session=' + session, 'Location', false)
+        loadData('/plugins/session-stats/location' + '?session=' + session, 'chart_loc', 'Location', false)
     }
 
 
