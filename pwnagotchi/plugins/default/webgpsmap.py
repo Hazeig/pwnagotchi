@@ -342,7 +342,6 @@ class PositionFile:
 
         # check wpa-sec and ohc files
         mac = self.mac().lower()
-        mac = ":".join([mac[i:i+2] for i in range(0, len(mac), 2)])
         handshake_dir = os.path.dirname(self._file)
         files_to_check = ['onlinehashcrack.cracked.potfile','wpa-sec.cracked.potfile']
         for check in files_to_check:
