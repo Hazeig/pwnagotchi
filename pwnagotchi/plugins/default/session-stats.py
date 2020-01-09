@@ -177,16 +177,18 @@ class SessionStats(plugins.Plugin):
         self.options = dict()
         self.stats = dict()
         self.clock = GhettoClock()
-        self.session_name = "stats_{}.json".format(self.clock.get().now().strftime("%Y_%m_%d_%H_%M"))
-        os.makedirs(self.options['save_directory'], exist_ok=True)
-        self.session = StatusFile(os.path.join(self.options['save_directory'],
-                                               self.session_name),
-                                  data_format='json')
 
     def on_loaded(self):
         """
         Gets called when the plugin gets loaded
         """
+        # this has to happen in "loaded" because the options are not yet
+        # available in the __init__
+        os.makedirs(self.options['save_directory'], exist_ok=True)
+        self.session_name = "stats_{}.json".format(self.clock.get().now().strftime("%Y_%m_%d_%H_%M"))
+        self.session = StatusFile(os.path.join(self.options['save_directory'],
+                                               self.session_name),
+                                  data_format='json')
         logging.info("Session-stats plugin loaded.")
 
     def on_unloaded(self, ui):
