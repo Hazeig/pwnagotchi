@@ -332,32 +332,31 @@ class PositionFile:
         password_file_path = base_filename + ".pcap.cracked"
         if os.path.isfile(password_file_path):
             try:
-                password_file = open(password_file_path, 'r')
-                return_pass = password_file.read()
-                password_file.close()
+                with open(password_file_path, 'r') as password_file:
+                    return_pass = password_file.read()
                 return return_pass
             except OSError as error:
                 logging.error("[webgpsmap] OS error: %s", error)
             except Exception as ex:
-                logging.error(f"[webgpsmap] Unexpected error: %s", ex)
-                raise ex
-        else:
-            # check wpa-sec and ohc files
-            mac = self.mac().lower()
-            mac = ":".join([mac[i:i+2] for i in range(0, len(mac), 2)])
-            handshake_dir = os.path.dirname(self._file)
-            files_to_check = ['onlinehashcrack.cracked.potfile','wpa-sec.cracked.potfile']
-            for check in files_to_check:
-                pw_file = os.path.join(handshake_dir, check)
-                if os.path.isfile(pw_file):
-                    for line in open(pw_file, "rt").readlines():
-                        if mac in line:
-                            # match!
-                            ssid, mac, sta, pw = line.split(":")
-                            # write pw to file, so we dont have to search again
-                            with open(password_file_path, "wt") as pw_file:
-                                pw_file.write(pw)
-                            return pw
+                logging.error("[webgpsmap] Unexpected error: %s", ex)
+
+        # check wpa-sec and ohc files
+        mac = self.mac().lower()
+        mac = ":".join([mac[i:i+2] for i in range(0, len(mac), 2)])
+        handshake_dir = os.path.dirname(self._file)
+        files_to_check = ['onlinehashcrack.cracked.potfile','wpa-sec.cracked.potfile']
+        for check in files_to_check:
+            pw_file = os.path.join(handshake_dir, check)
+            if os.path.isfile(pw_file):
+                for line in open(pw_file, "rt").readlines():
+                    if mac in line:
+                        # match!
+                        ssid, mac, sta, pw = line.split(":")
+                        # write pw to file, so we dont have to search again
+                        with open(password_file_path, "wt") as pw_file:
+                            pw_file.write(pw)
+                        return pw
+
         return None
 
 
