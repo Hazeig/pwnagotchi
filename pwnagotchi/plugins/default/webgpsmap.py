@@ -17,12 +17,12 @@ from functools import lru_cache
         https://blogs.kent.ac.uk/websolutions/2015/01/29/filtering-map-markers-with-leaflet-js-a-brief-technical-overview/
         http://www.digital-geography.com/filter-leaflet-maps-slider/
         http://bl.ocks.org/zross/47760925fcb1643b4225
-    - 
+    -
 '''
 
 class Webgpsmap(plugins.Plugin):
     __author__ = 'https://github.com/xenDE and https://github.com/dadav'
-    __version__ = '1.3.1'
+    __version__ = '1.4.0'
     __name__ = 'webgpsmap'
     __license__ = 'GPL3'
     __description__ = 'a plugin for pwnagotchi that shows a openstreetmap with positions of ap-handshakes in your webbrowser'
@@ -227,10 +227,9 @@ class Webgpsmap(plugins.Plugin):
                     'ts_last': pos.timestamp_last(),
                     }
 
-                # get ap password if exist
-                check_for = os.path.basename(pos_file[:-9]) + ".pcap.cracked"
-                if check_for in all_files:
-                    gps_data[ssid + "_" + mac]["pass"] = pos.password()
+                pw = pos.password()
+                if pw: # in python3.8 use walrus
+                    gps_data[ssid + "_" + mac]["pass"] = pw
 
                 self.ALREADY_SENT += pos_file
             except json.JSONDecodeError as error:
@@ -343,7 +342,6 @@ class PositionFile:
         """
         returns the password from file.pcap.cracked or None
         """
-        return_pass = None
         # 2do: make better filename split/remove extension because this one has problems with "." in path
         base_filename, ext1, ext2 = re.split('\.', self._file)
         password_file_path = base_filename + ".pcap.cracked"
@@ -352,12 +350,30 @@ class PositionFile:
                 password_file = open(password_file_path, 'r')
                 return_pass = password_file.read()
                 password_file.close()
+                return return_pass
             except OSError as error:
-                logging.error(f"[webgpsmap] OS error: {format(error)}")
-            except:
-                logging.error(f"[webgpsmap] Unexpected error: {sys.exc_info()[0]}")
-                raise
-        return return_pass
+                logging.error("[webgpsmap] OS error: %s", error)
+            except Exception as ex:
+                logging.error(f"[webgpsmap] Unexpected error: %s", ex)
+                raise ex
+        else:
+            # check wpa-sec and ohc files
+            mac = self.mac().lower()
+            mac = ":".join([mac[i:i+2] for i in range(0, len(mac), 2)])
+            handshake_dir = os.path.dirname(self._file)
+            files_to_check = ['onlinehashcrack.cracked.potfile','wpa-sec.cracked.potfile']
+            for check in files_to_check:
+                pw_file = os.path.join(handshake_dir, check)
+                if os.path.exist(pw_file):
+                    for line in open(pw_file, "rt").readlines():
+                        if mac in line:
+                            # match!
+                            ssid, mac, sta, pw = line.split(":")
+                            # write pw to file, so we dont have to search again
+                            with open(password_file_path, "wt") as pw_file:
+                                pw_file.write(pw)
+                            return pw
+
 
     def type(self):
         """
