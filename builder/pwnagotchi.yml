@@ -61,6 +61,7 @@
           - python3-pip
           - python3-mpi4py
           - python3-smbus
+          - python3-bs4
           - unzip
           - gawk
           - libopenmpi-dev
