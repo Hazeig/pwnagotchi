@@ -1,4 +1,3 @@
-import pwnagotchi.plugins as plugins
 import logging
 import os
 import json
@@ -7,18 +6,7 @@ import datetime
 from flask import Response
 from functools import lru_cache
 
-'''
-2do:
-    - make+test the cache handling multiple clients
-    - cleanup the javascript in a class and handle "/newest" additions
-    - create map filters (only cracked APs, only last xx days, between 2 days with slider)
-        http://www.gistechsolutions.com/leaflet/DEMO/filter/filter.html
-        https://gis.stackexchange.com/questions/312737/filtering-interactive-leaflet-map-with-dropdown-menu
-        https://blogs.kent.ac.uk/websolutions/2015/01/29/filtering-map-markers-with-leaflet-js-a-brief-technical-overview/
-        http://www.digital-geography.com/filter-leaflet-maps-slider/
-        http://bl.ocks.org/zross/47760925fcb1643b4225
-    -
-'''
+import pwnagotchi.plugins as plugins
 
 class Webgpsmap(plugins.Plugin):
     __author__ = 'https://github.com/xenDE and https://github.com/dadav'
@@ -44,9 +32,6 @@ class Webgpsmap(plugins.Plugin):
         logging.info("[webgpsmap]: plugin loaded")
 
     def on_webhook(self, path, request):
-        """
-        Returns ewquested data
-        """
         # defaults:
         response_header_contenttype = None
         response_header_contentdisposition = None
@@ -364,7 +349,7 @@ class PositionFile:
             files_to_check = ['onlinehashcrack.cracked.potfile','wpa-sec.cracked.potfile']
             for check in files_to_check:
                 pw_file = os.path.join(handshake_dir, check)
-                if os.path.exist(pw_file):
+                if os.path.isfile(pw_file):
                     for line in open(pw_file, "rt").readlines():
                         if mac in line:
                             # match!
@@ -373,6 +358,7 @@ class PositionFile:
                             with open(password_file_path, "wt") as pw_file:
                                 pw_file.write(pw)
                             return pw
+        return None
 
 
     def type(self):
