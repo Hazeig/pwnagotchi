@@ -1,7 +1,8 @@
 import os
 import logging
 import threading
-from datetime import datetime
+from time import sleep
+from datetime import datetime,timedelta
 from pwnagotchi import plugins
 from pwnagotchi.utils import StatusFile
 from flask import render_template_string
@@ -146,6 +147,25 @@ TEMPLATE = """
 {% endblock %}
 """
 
+class GhettoClock:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self._track = datetime.now()
+        self._counter_thread = threading.Thread(target=self.counter)
+        self._counter_thread.daemon = True
+        self._counter_thread.start()
+
+    def counter(self):
+        while True:
+            with self.lock:
+                self._track += timedelta(seconds=1)
+            sleep(1)
+
+    def get(self):
+        with self.lock:
+            return self._track
+
+
 class SessionStats(plugins.Plugin):
     __author__ = '33197631+dadav@users.noreply.github.com'
     __version__ = '0.1.0'
@@ -153,22 +173,21 @@ class SessionStats(plugins.Plugin):
     __description__ = 'This plugin displays stats of the current session.'
 
     def __init__(self):
-        self.ready = False
         self.lock = threading.Lock()
         self.options = dict()
         self.stats = dict()
-        self.session_name = "stats_{}.json".format(datetime.now().strftime("%Y_%m_%d_%H_%M"))
+        self.clock = GhettoClock()
+        self.session_name = "stats_{}.json".format(self.clock.get().now().strftime("%Y_%m_%d_%H_%M"))
+        os.makedirs(self.options['save_directory'], exist_ok=True)
+        self.session = StatusFile(os.path.join(self.options['save_directory'],
+                                               self.session_name),
+                                  data_format='json')
 
     def on_loaded(self):
         """
         Gets called when the plugin gets loaded
         """
         logging.info("Session-stats plugin loaded.")
-        os.makedirs(self.options['save_directory'], exist_ok=True)
-        self.session = StatusFile(os.path.join(self.options['save_directory'],
-                                               self.session_name),
-                                  data_format='json')
-        self.ready = True
 
     def on_unloaded(self, ui):
         pass
@@ -178,7 +197,7 @@ class SessionStats(plugins.Plugin):
         Save the epoch_data to self.stats
         """
         with self.lock:
-            self.stats[datetime.now().strftime("%H:%M:%S")] = epoch_data
+            self.stats[self.clock.get().now().strftime("%H:%M:%S")] = epoch_data
             self.session.update(data={'data': self.stats})
 
     @staticmethod
