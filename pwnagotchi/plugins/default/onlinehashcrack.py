@@ -91,10 +91,10 @@ class OnlineHashCrack(plugins.Plugin):
                     for line in success:
                         columns = line.select("td")
                         ssid = columns[0].text.strip()
-                        ap = columns[1].text
-                        sta = columns[2].text
-                        pw = columns[5].text
-                        output_file.write(":".join([ssid, ap, sta, pw]))
+                        ap = columns[1].text.strip()
+                        sta = columns[2].text.strip()
+                        pw = columns[5].text.strip()
+                        output_file.write(":".join([ssid, ap, sta, pw]) + "\n")
                 return len(success)
             else:
                 return 0
