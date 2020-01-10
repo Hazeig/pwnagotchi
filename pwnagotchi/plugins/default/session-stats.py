@@ -161,7 +161,7 @@ class GhettoClock:
                 self._track += timedelta(seconds=1)
             sleep(1)
 
-    def get(self):
+    def now(self):
         with self.lock:
             return self._track
 
@@ -185,7 +185,7 @@ class SessionStats(plugins.Plugin):
         # this has to happen in "loaded" because the options are not yet
         # available in the __init__
         os.makedirs(self.options['save_directory'], exist_ok=True)
-        self.session_name = "stats_{}.json".format(self.clock.get().now().strftime("%Y_%m_%d_%H_%M"))
+        self.session_name = "stats_{}.json".format(self.clock.now().strftime("%Y_%m_%d_%H_%M"))
         self.session = StatusFile(os.path.join(self.options['save_directory'],
                                                self.session_name),
                                   data_format='json')
@@ -199,7 +199,7 @@ class SessionStats(plugins.Plugin):
         Save the epoch_data to self.stats
         """
         with self.lock:
-            self.stats[self.clock.get().now().strftime("%H:%M:%S")] = epoch_data
+            self.stats[self.clock.now().strftime("%H:%M:%S")] = epoch_data
             self.session.update(data={'data': self.stats})
 
     @staticmethod
